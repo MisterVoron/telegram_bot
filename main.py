@@ -2,6 +2,8 @@ from config import BOT_TOKEN
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
 from aiogram.types import Message
+from aiogram import F
+
 
 
 bot = Bot(token=BOT_TOKEN)
@@ -14,7 +16,7 @@ async def process_start_command(message: Message):
 
 async def process_help_command(message: Message):
     await message.answer(
-        "Напиши мне что-нибудь!"
+        "Напиши мне что-нибудь! "
         "Увидишь магию..."
     )
 
@@ -23,8 +25,13 @@ async def send_echo(message: Message):
     await message.reply(text=message.text)
 
 
+async def process_image(message: Message):
+    await message.reply_photo(message.photo[0].file_id)
+
+
 dp.message.register(process_start_command, Command(commands=["start"]))
 dp.message.register(process_help_command, Command(commands=["help"]))
+dp.message.register(process_image, F.photo)
 dp.message.register(send_echo)
 
 
