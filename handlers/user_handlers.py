@@ -1,4 +1,4 @@
-from aiogram import Router, F
+from aiogram import Router, F, Bot
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
 from keyboards.keyboards import game_kb, yes_no_kb
@@ -15,6 +15,12 @@ async def process_start_command(message: Message):
     if id_user not in users:
         users[id_user] = user
     await message.answer(text=LEXICON_RU['/start'], reply_markup=yes_no_kb)
+
+
+@router.message(Command(commands='delmenu'))
+async def del_main_menu(message: Message, bot: Bot):
+    await bot.delete_my_commands()
+    await message.answer(text='Кнопка Меню удалена!')
 
 
 @router.message(Command(commands='help'))
