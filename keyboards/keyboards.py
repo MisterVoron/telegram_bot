@@ -16,10 +16,11 @@ yes_no_kb: ReplyKeyboardMarkup = yes_no_kb_builder.as_markup(
 button1 = KeyboardButton(text=LEXICON_RU['rock'])
 button2 = KeyboardButton(text=LEXICON_RU['scissors'])
 button3 = KeyboardButton(text=LEXICON_RU['paper'])
+button4 = KeyboardButton(text=LEXICON_RU['lizard'])
+button5 = KeyboardButton(text=LEXICON_RU['spock'])
 
 game_kb = ReplyKeyboardMarkup(
-    keyboard=[[button1],
-              [button2],
-              [button3]],
+    keyboard=[[button1, button2, button3],
+              [button4, button5]],
     resize_keyboard=True
 )
