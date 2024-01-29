@@ -1,7 +1,7 @@
 from aiogram import Router, F, Bot
 from aiogram.filters import Command, CommandStart
 from aiogram.types import Message
-from keyboards.keyboards import game_kb, yes_no_kb
+from keyboards.keyboards import game_kb, yes_no_kb, inlain_kb
 from services.services import get_bot_choice, get_winner
 from services.statistic import user, users
 from lexicon.lexicon import LEXICON_RU
@@ -33,7 +33,8 @@ async def process_stat_command(message: Message):
     id_user = message.from_user.id
     await message.answer(text=f'{LEXICON_RU["win"]} {users[id_user]["win"]}\n'
                               f'{LEXICON_RU["lose"]} {users[id_user]["lose"]}\n'
-                              f'{LEXICON_RU["draw"]} {users[id_user]["draw"]}')
+                              f'{LEXICON_RU["draw"]} {users[id_user]["draw"]}',
+                              reply_markup=inlain_kb)
 
 
 @router.message(F.text == LEXICON_RU['yes_button'])
