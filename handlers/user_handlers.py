@@ -1,60 +1,152 @@
-from aiogram import Router, F, Bot
+from aiogram import Router, F
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message
-from keyboards.keyboards import game_kb, yes_no_kb, inlain_kb
-from services.services import get_bot_choice, get_winner
-from services.statistic import user, users
-from lexicon.lexicon import LEXICON_RU
+from aiogram.types import Message, CallbackQuery
+from copy import deepcopy
+from database.database import user_dict_template, users_db
+from lexicon.lexicon import LEXICON
+from services.file_handling import book
+from keyboards.pagination_kb import create_pagination_keyboard
+from keyboards.bookmark_kb import create_bookmarks_keyboard, create_edit_keyboard
+from filters.filters import IsDigitCallbackData, IsDelBookmarkCallbackData
 
 
 router = Router()
+router.message.filter(lambda x: x.from_user.id in users_db)
+
 
 @router.message(CommandStart())
 async def process_start_command(message: Message):
-    id_user = message.from_user.id
-    if id_user not in users:
-        users[id_user] = user
-    await message.answer(text=LEXICON_RU['/start'], reply_markup=yes_no_kb)
-
-
-@router.message(Command(commands='delmenu'))
-async def del_main_menu(message: Message, bot: Bot):
-    await bot.delete_my_commands()
-    await message.answer(text='Кнопка Меню удалена!')
+    await message.answer(LEXICON[message.text])
+    if message.from_user.id not in users_db:
+        users_db[message.from_user.id] = deepcopy(user_dict_template)
 
 
 @router.message(Command(commands='help'))
 async def process_help_command(message: Message):
-    await message.answer(text=LEXICON_RU['/help'], reply_markup=yes_no_kb)
+    await message.answer(LEXICON[message.text])
 
 
-@router.message(Command(commands='stat'))
-async def process_stat_command(message: Message):
-    id_user = message.from_user.id
-    await message.answer(text=f'{LEXICON_RU["win"]} {users[id_user]["win"]}\n'
-                              f'{LEXICON_RU["lose"]} {users[id_user]["lose"]}\n'
-                              f'{LEXICON_RU["draw"]} {users[id_user]["draw"]}',
-                              reply_markup=inlain_kb)
+@router.message(Command(commands='beginning'))
+async def process_beginning_command(message: Message):
+    users_db[message.from_user.id]['page'] = 1
+    text = book[users_db[message.from_user.id]['page']]
+    await message.answer(
+        text=text,
+        reply_markup=create_pagination_keyboard(
+            'backward',
+            f'{users_db[message.from_user.id]["page"]}/{len(book)}',
+            'forward'
+        )
+    )
 
 
-@router.message(F.text == LEXICON_RU['yes_button'])
-async def process_yes_answer(message: Message):
-    await message.answer(text=LEXICON_RU['yes'], reply_markup=game_kb)
+@router.message(Command(commands='continue'))
+async def process_continue_command(message: Message):
+    text = book[users_db[message.from_user.id]['page']]
+    await message.answer(
+        text=text,
+        reply_markup=create_pagination_keyboard(
+            'backward',
+            f'{users_db[message.from_user.id]["page"]}/{len(book)}',
+            'forward'
+        )
+    )
 
 
-@router.message(F.text == LEXICON_RU['no_button'])
-async def process_no_answer(message: Message):
-    await message.answer(text=LEXICON_RU['no'])
+
+@router.message(Command(commands='bookmarks'))
+async def process_bookmarks_command(message: Message):
+    if users_db[message.from_user.id]['bookmarks']:
+        await message.answer(
+            text=LEXICON[message.text],
+            reply_markup=create_bookmarks_keyboard(*users_db[message.from_user.id]['bookmarks'])
+        )
+    else:
+        await message.answer(text=LEXICON['no_bookmarks'])
 
 
-@router.message(F.text.in_([LEXICON_RU['paper'],
-                            LEXICON_RU['rock'],
-                            LEXICON_RU['scissors'],
-                            LEXICON_RU['lizard'],
-                            LEXICON_RU['spock']]))
-async def process_game_button(message: Message):
-    bot_choice = get_bot_choice()
-    await message.answer(text=f'{LEXICON_RU["bot_choice"]} '
-                              f'- {LEXICON_RU[bot_choice]}')
-    winner = get_winner(message, bot_choice)
-    await message.answer(text=LEXICON_RU[winner], reply_markup=yes_no_kb)
+@router.callback_query(F.data == 'forward')
+async def process_forward_press(callback: CallbackQuery):
+    if users_db[callback.from_user.id]['page'] < len(book):
+        users_db[callback.from_user.id]['page'] += 1
+        text = book[users_db[callback.from_user.id]['page']]
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=create_pagination_keyboard(
+                'backward',
+                f'{users_db[callback.from_user.id]["page"]}/{len(book)}',
+                'forward'
+            )
+        )
+    await callback.answer()
+
+
+@router.callback_query(F.data == 'backward')
+async def process_backward_press(callback: CallbackQuery):
+    if users_db[callback.from_user.id]['page'] > 1:
+        users_db[callback.from_user.id]['page'] -= 1
+        text = book[users_db[callback.from_user.id]['page']]
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=create_pagination_keyboard(
+                'backward',
+                f'{users_db[callback.from_user.id]["page"]}/{len(book)}',
+                'forward'
+            )
+        )
+    await callback.answer()
+
+
+@router.callback_query(lambda x: '/' in x.data and x.data.replace('/', '').isdigit())
+async def process_page_press(callback: CallbackQuery):
+    users_db[callback.from_user.id]['bookmarks'].add(
+        users_db[callback.from_user.id]['page']
+    )
+    await callback.answer('Страница добавлена в закладки')
+
+
+@router.callback_query(IsDigitCallbackData())
+async def pocess_bookmark_press(callback: CallbackQuery):
+    users_db[callback.from_user.id]['page'] = int(callback.data)
+    text = book[int(callback.data)]
+    await callback.message.edit_text(
+        text=text,
+        reply_markup=create_pagination_keyboard(
+            'backward',
+            f'{users_db[callback.from_user.id]["page"]}/{len(book)}',
+            'forward'
+        )
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == 'edit_bookmarks')
+async def process_edit_press(callback: CallbackQuery):
+    await callback.message.edit_text(
+        text=LEXICON[callback.data],
+        reply_markup=create_edit_keyboard(
+            *users_db[callback.from_user.id]['bookmarks']
+        )
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == 'cancel')
+async def process_cancel_press(callback: CallbackQuery):
+    await callback.message.edit_text(LEXICON['cancel_text'])
+    await callback.answer()
+
+
+@router.callback_query(IsDelBookmarkCallbackData())
+async def process_del_bookmark_press(callback: CallbackQuery):
+    users_db[callback.from_user.id]['bookmarks'].remove(int(callback.data[:-3]))
+    if users_db[callback.from_user.id]['bookmarks']:
+        await callback.message.edit_text(
+            text=LEXICON['/bookmarks'],
+            reply_markup=create_edit_keyboard(
+                *users_db[callback.from_user.id]['bookmarks']
+            )
+        )
+    else:
+        await callback.message.edit_text(text=LEXICON['no_bookmarks'])
+    await callback.answer()
